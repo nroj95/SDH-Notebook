@@ -12,7 +12,7 @@ import {
   DropdownOption,
   Marquee,
 } from "decky-frontend-lib";
-import { VFC, useState, useEffect } from "react";
+import { VFC, useState, useEffect, useLayoutEffect, useRef } from "react";
 import { FaBookOpen, FaPenFancy, FaEraser, FaTrash } from "react-icons/fa";
 import {
   ReactSketchCanvas,
@@ -90,6 +90,32 @@ const Content: VFC<{ serverAPI: ServerAPI }> = ({ serverAPI }) => {
   const [selectedPage, setSelectedPage] = useState<number>(0);
   const [deleteState, setDeleteState] = useState<boolean>(false);
   const [disableState, setDisableState] = useState<boolean>(true);
+
+  // The dotted paper (background) fills the whole panel, so the canvas must too: a fixed 19.5rem
+  // fitted the Steam Deck, but on taller panels (e.g. Legion Go S) it left the bottom of the paper
+  // undrawable. The canvas now reaches from its top edge to the bottom of the Quick Access window.
+  // Measured in the canvas's OWN window (ownerDocument.defaultView): plugin code runs in Steam's
+  // hidden SharedJSContext, whose `window` is 1x1 px. The top is summed from offsetTop (layout
+  // position), which ignores the panel's slide-in animation. Re-fitted whenever the canvas becomes
+  // visible (IntersectionObserver) or that window resizes.
+  const canvasAreaRef = useRef<HTMLDivElement>(null);
+  const [canvasHeight, setCanvasHeight] = useState<string>("19.5rem");
+  useLayoutEffect(() => {
+    const area = canvasAreaRef.current;
+    const view = area?.ownerDocument.defaultView;
+    if (!area || !view) return;
+    const fit = () => {
+      let top = 0;
+      for (let el: HTMLElement | null = area; el; el = el.offsetParent as HTMLElement | null) top += el.offsetTop;
+      const height = Math.floor(view.innerHeight - top);
+      setCanvasHeight(height >= 100 ? `${height}px` : "19.5rem"); // implausible layout: keep the original size
+    };
+    fit();
+    const visibility = new view.IntersectionObserver(entries => { if (entries.some(e => e.isIntersecting)) fit(); });
+    visibility.observe(area);
+    view.addEventListener("resize", fit);
+    return () => { visibility.disconnect(); view.removeEventListener("resize", fit); };
+  }, []);
   const [pages, setPages] = useState<DropdownOption[]>(
     Array.from({ length: config.MaxPages }, (_, i) => ({
       label: <PageLabel page={i} timestamp={0} />,
@@ -345,7 +371,7 @@ const Content: VFC<{ serverAPI: ServerAPI }> = ({ serverAPI }) => {
             onChange={handleDropDownChange}
           />
         </PanelSectionRow>
-        <div style={{ marginTop: "0.5rem" }}>
+        <div ref={canvasAreaRef} style={{ marginTop: "0.5rem" }}>
           <div
             style={{
               position: "absolute",
@@ -380,7 +406,7 @@ const Content: VFC<{ serverAPI: ServerAPI }> = ({ serverAPI }) => {
             canvasColor={config.CanvasBackgroundColor}
             strokeWidth={config.CanvasStrokeWidth}
             eraserWidth={config.CanvasEraserWidth}
-            height="19.5rem"
+            height={canvasHeight}
             style={{ zIndex: 0 }}
             onStroke={handleCanvasStroke}
           />
