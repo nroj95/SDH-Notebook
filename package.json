@@ -51,13 +51,5 @@
     "react-icons": "^4.8.0",
     "react-sketch-canvas": "^6.2.0",
     "react-timeago": "^7.1.0"
-  },
-  "pnpm": {
-    "peerDependencyRules": {
-      "ignoreMissing": [
-        "react",
-        "react-dom"
-      ]
-    }
   }
 }

@@ -1,0 +1,5 @@
+# pnpm reads its project settings from this file; pnpm 10+ ignores the "pnpm" field in package.json.
+peerDependencyRules:
+  ignoreMissing:
+    - react
+    - react-dom
