@@ -1,4 +1,4 @@
-// maximum amount of pages to list
+// maximum amount of pages per app (D-pad up/down flips through them)
 export const MaxPages: number = 8;
 
 // debounce delay of refreshes
@@ -7,17 +7,21 @@ export const RefreshWait: number = 500;
 // throttle wait of FocusChangeEvents
 export const FocusChangeEventWait: number = 500;
 
-// debounce delay of DropdownChangeEvents
-export const DropdownChangeEventWait: number = 500;
+// how long L2 must be held to clear the page (ms)
+export const ClearHoldTime: number = 1000;
 
-// debounce delay of DeleteButtonClicks
-export const DeleteButtonClickWait: number = 250;
+// an L2 press shorter than this is a tap on the footer hint (touch), which arms clearing (ms)
+export const TapMaxDuration: number = 50;
 
-// duration of the Tap to confirm prompt on delete
-export const TapToConfirmTimeout: number = 4000;
+// how long a first tap keeps clearing armed for the confirming second tap (ms)
+export const TapToConfirmTimeout: number = 3000;
 
-// debounce delays between stroke actions
-export const CanvasSaveWait: number = 1000;
+// button numbers from SteamClient.Input.RegisterForControllerInputMessages (measured on the
+// Legion Go S; these raw events also arrive in touch mode, unlike Steam's focus events)
+export const RawButtonL1: number = 30;
+export const RawButtonL2: number = 28;
+export const RawButtonUp: number = 20;
+export const RawButtonDown: number = 21;
 
 // width of the canvas pen stroke
 export const CanvasStrokeWidth: number = 4;
