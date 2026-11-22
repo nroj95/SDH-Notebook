@@ -9,7 +9,7 @@
  *   the hints with real glyphs (the title, not the tall canvas, holds focus so Steam never scrolls
  *   the panel):
  *     D-pad up / down   previous / next page (focus stays on the canvas)
- *     L1                pencil <-> eraser (hint names the tool you switch to)
+ *     L1                pencil <-> eraser (hint shows the tool in use: green Pencil, red Eraser)
  *     L2 (hold 1 s)     clear page; a ring fills in the middle of the canvas, letting go cancels
  *     tap L2 hint twice touch: the first tap shows a full ring and "Tap again to clear" for 3 s,
  *                       the second clears (a hint tap is a down+up in the same instant)
@@ -37,7 +37,7 @@ import {
   GamepadButton,
   GamepadEvent,
 } from "decky-frontend-lib";
-import { VFC, useState, useEffect, useLayoutEffect, useRef } from "react";
+import { VFC, ReactNode, useState, useEffect, useLayoutEffect, useRef } from "react";
 import { FaBookOpen, FaTrash } from "react-icons/fa";
 import {
   ReactSketchCanvas,
@@ -88,6 +88,41 @@ const PageAge: VFC<{ timestamp: number }> = ({ timestamp }) =>
   ) : (
     <span>empty</span>
   );
+
+// SVG colour matrix that multiplies by a colour: white becomes the colour, black stays black
+const tintMatrix = (hex: string) => {
+  const n = parseInt(hex.slice(1), 16);
+  const [r, g, b] = [(n >> 16) & 255, (n >> 8) & 255, n & 255].map((v) => (v / 255).toFixed(3));
+  return `${r} 0 0 0 0  0 ${g} 0 0 0  0 0 ${b} 0 0  0 0 0 1 0`;
+};
+const TINT_ID = "sdh-notebook-tool-tint";
+
+// L1 footer hint: the tool in use, in its colour (green Pencil, red Eraser). Steam draws the button
+// glyph itself, as an <img> beside this label, so the label also tints that sibling glyph with the
+// colour matrix above (defined inside the label, so it lives in the footer's document) and removes
+// the tint again when the hint goes away.
+const ToolHint: VFC<{ eraser: boolean }> = ({ eraser }) => {
+  const ref = useRef<HTMLSpanElement>(null);
+  const color = eraser ? config.EraserColor : config.PencilColor;
+  useEffect(() => {
+    const glyph = ref.current?.parentElement?.parentElement?.querySelector("img");
+    if (!glyph) return;
+    glyph.style.filter = `url(#${TINT_ID})`;
+    return () => {
+      glyph.style.filter = "";
+    };
+  }, []);
+  return (
+    <span ref={ref} style={{ color }}>
+      <svg width="0" height="0" style={{ position: "absolute" }}>
+        <filter id={TINT_ID} colorInterpolationFilters="sRGB">
+          <feColorMatrix type="matrix" values={tintMatrix(color)} />
+        </filter>
+      </svg>
+      {eraser ? "Eraser" : "Pencil"}
+    </span>
+  );
+};
 
 // circumference of the hold-to-clear ring (radius 40)
 const RING = 2 * Math.PI * 40;
@@ -431,8 +466,8 @@ const Content: VFC<{ serverAPI: ServerAPI }> = ({ serverAPI }) => {
   };
 
   // footer hints, shown by Steam with its own glyphs while the Notebook (its title line) has focus
-  const actions: { [key in GamepadButton]?: string } = {
-    [GamepadButton.BUMPER_LEFT]: eraserMode ? "Pencil" : "Eraser",
+  const actions: { [key in GamepadButton]?: ReactNode } = {
+    [GamepadButton.BUMPER_LEFT]: <ToolHint eraser={eraserMode} />,
     [GamepadButton.TRIGGER_LEFT]: clearArmed ? "Tap again to clear" : "Hold to clear page",
   };
   if (selectedPage > 0) actions[GamepadButton.DIR_UP] = "Previous page";

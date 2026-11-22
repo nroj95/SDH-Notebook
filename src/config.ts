@@ -32,5 +32,9 @@ export const CanvasEraserWidth: number = 16;
 // color of the pen
 export const CanvasStrokeColor: string = "white";
 
+// footer hint colors (text and L1 glyph) for the tool in use, as #rrggbb
+export const PencilColor: string = "#59bf40";
+export const EraserColor: string = "#ff5a5a";
+
 // background color of the canvas
 export const CanvasBackgroundColor: string = "transparent";
