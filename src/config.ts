@@ -22,6 +22,8 @@ export const RawButtonL1: number = 30;
 export const RawButtonL2: number = 28;
 export const RawButtonUp: number = 20;
 export const RawButtonDown: number = 21;
+export const RawButtonLeft: number = 22;
+export const RawButtonRight: number = 23;
 
 // width of the canvas pen stroke
 export const CanvasStrokeWidth: number = 4;

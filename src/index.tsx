@@ -8,10 +8,11 @@
  *   The title line is a Steam Focusable whose actionDescriptionMap makes Steam's own footer show
  *   the hints with real glyphs (the title, not the tall canvas, holds focus so Steam never scrolls
  *   the panel):
- *     D-pad up / down   previous / next page (focus stays on the canvas)
+ *     D-pad up / down   previous / next page (focus stays on the Notebook)
+ *     D-pad left/right  undo / redo a stroke (saved like a stroke; a page switch clears the history)
  *     L1                pencil <-> eraser (hint shows the tool in use: green Pencil, red Eraser)
  *     L2 (hold 1 s)     clear page; a ring fills in the middle of the canvas, letting go cancels
- *     tap L2 hint twice touch: the first tap shows a full ring and "Tap again to clear" for 3 s,
+ *     tap L2 hint twice touch: the first tap shows a full ring and "Tap again" for 3 s,
  *                       the second clears (a hint tap is a down+up in the same instant)
  * - The title line takes controller focus when the Notebook opens. Paper and canvas both end
  *   exactly at the bottom of the panel.
@@ -403,6 +404,31 @@ const Content: VFC<{ serverAPI: ServerAPI }> = ({ serverAPI }) => {
 
   const isPageButton = (button: number) =>
     button === GamepadButton.DIR_UP || button === GamepadButton.DIR_DOWN;
+  const isDpad = (button: number) =>
+    isPageButton(button) || button === GamepadButton.DIR_LEFT || button === GamepadButton.DIR_RIGHT;
+
+  // the page on screen right now, for saves that finish after a page switch could have happened
+  const pageRef = useRef<number>(0);
+  pageRef.current = selectedPage;
+
+  // saves the canvas as it is now to `page`, unless another page is on screen by then
+  const saveCurrentPage = async (page: number) => {
+    if (pageRef.current !== page) return;
+    const appid = Number(Router.MainRunningApp?.appid || 0);
+    const canvasPaths = await sketchCanvasRef.current?.exportPaths();
+    const timestamp = await savePage(appid, page, canvasPaths || []);
+    setPageTime(page, timestamp);
+  };
+
+  // D-pad left/right: undo/redo a stroke with the canvas's own history (a page switch clears it),
+  // then save the page like after a stroke; the canvas applies the change on its next render
+  const undoRedo = (redo: boolean) => {
+    if (disableState) return;
+    if (redo) sketchCanvasRef.current?.redo();
+    else sketchCanvasRef.current?.undo();
+    const page = selectedPage;
+    window.setTimeout(() => saveCurrentPage(page), 50);
+  };
 
   // Real button presses are handled from SteamClient's raw controller events: after a touch, Steam
   // spends the first press on switching back to controller mode, so that press never reaches the
@@ -419,6 +445,8 @@ const Content: VFC<{ serverAPI: ServerAPI }> = ({ serverAPI }) => {
     if (button === config.RawButtonL1) toggleEraser();
     else if (button === config.RawButtonUp) changePage(selectedPage - 1);
     else if (button === config.RawButtonDown) changePage(selectedPage + 1);
+    else if (button === config.RawButtonLeft) undoRedo(false);
+    else if (button === config.RawButtonRight) undoRedo(true);
   };
   useEffect(() => {
     const reg = (globalThis as any).SteamClient.Input.RegisterForControllerInputMessages(
@@ -434,6 +462,8 @@ const Content: VFC<{ serverAPI: ServerAPI }> = ({ serverAPI }) => {
   const ownButtons: number[] = [
     GamepadButton.DIR_UP,
     GamepadButton.DIR_DOWN,
+    GamepadButton.DIR_LEFT,
+    GamepadButton.DIR_RIGHT,
     GamepadButton.BUMPER_LEFT,
     GamepadButton.TRIGGER_LEFT,
   ];
@@ -452,35 +482,35 @@ const Content: VFC<{ serverAPI: ServerAPI }> = ({ serverAPI }) => {
     if (button === GamepadButton.BUMPER_LEFT) return toggleEraser();
     if (isPageButton(button))
       return void changePage(selectedPage + (button === GamepadButton.DIR_DOWN ? 1 : -1));
+    if (isDpad(button)) return undoRedo(button === GamepadButton.DIR_RIGHT);
     if (clearArmed) return void clearPage();
     setClearArmed(true);
     clearTimeout(armTimerRef.current);
     armTimerRef.current = window.setTimeout(() => setClearArmed(false), config.TapToConfirmTimeout);
   };
 
-  // up/down flip pages, so they must not also move focus away from the canvas
+  // the D-pad flips pages and undoes/redoes, so it must not also move focus away from the Notebook
   const handleGamepadDirection = (evt: GamepadEvent) => {
-    if (!isPageButton(evt.detail.button)) return;
+    if (!isDpad(evt.detail.button)) return;
     evt.preventDefault();
     evt.stopPropagation();
   };
 
-  // footer hints, shown by Steam with its own glyphs while the Notebook (its title line) has focus
+  // Footer hints, shown by Steam with its own glyphs while the Notebook (its title line) has focus.
+  // Short labels so all of them fit. Steam fills each slot we leave undefined from a parent element,
+  // so OK is set to null: A does nothing here, and the inherited "Select" only took space.
   const actions: { [key in GamepadButton]?: ReactNode } = {
+    [GamepadButton.OK]: null,
+    [GamepadButton.DIR_LEFT]: "Undo",
+    [GamepadButton.DIR_RIGHT]: "Redo",
     [GamepadButton.BUMPER_LEFT]: <ToolHint eraser={eraserMode} />,
-    [GamepadButton.TRIGGER_LEFT]: clearArmed ? "Tap again to clear" : "Hold to clear page",
+    [GamepadButton.TRIGGER_LEFT]: clearArmed ? "Tap again" : "Hold: clear",
   };
-  if (selectedPage > 0) actions[GamepadButton.DIR_UP] = "Previous page";
-  if (selectedPage < config.MaxPages - 1) actions[GamepadButton.DIR_DOWN] = "Next page";
+  if (selectedPage > 0) actions[GamepadButton.DIR_UP] = "Prev";
+  if (selectedPage < config.MaxPages - 1) actions[GamepadButton.DIR_DOWN] = "Next";
 
   // saves each stroke right away, together with the page it was drawn on
-  const handleCanvasStroke = async (_path: CanvasPath, _isEraser: boolean) => {
-    const appid = Number(Router.MainRunningApp?.appid || 0);
-    const page = selectedPage;
-    const canvasPaths = await sketchCanvasRef.current?.exportPaths();
-    const timestamp = await savePage(appid, page, canvasPaths || []);
-    setPageTime(page, timestamp);
-  };
+  const handleCanvasStroke = (_path: CanvasPath, _isEraser: boolean) => saveCurrentPage(selectedPage);
 
   return (
     <div
